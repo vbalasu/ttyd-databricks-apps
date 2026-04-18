@@ -18,8 +18,8 @@ if [[ -z "$PROFILE" ]]; then
     read -rp "Enter profile name: " PROFILE
 fi
 
-# Validate profile
-if ! databricks auth profiles 2>/dev/null | grep -q "$PROFILE.*YES"; then
+# Validate profile by attempting to fetch a token
+if ! databricks auth token --profile="$PROFILE" &>/dev/null; then
     echo ""
     echo "Profile '$PROFILE' is not valid or does not exist."
     read -rp "Workspace host URL (e.g. https://my-workspace.cloud.databricks.com): " HOST
@@ -44,7 +44,7 @@ echo "  App name:       $APP_NAME"
 echo "  Workspace path: $WORKSPACE_PATH"
 echo ""
 read -rp "Proceed? [Y/n] " CONFIRM
-if [[ "${CONFIRM,,}" == "n" ]]; then
+if [[ "$CONFIRM" == "n" || "$CONFIRM" == "N" ]]; then
     echo "Aborted."
     exit 0
 fi
