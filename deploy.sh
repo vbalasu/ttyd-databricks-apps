@@ -4,18 +4,53 @@ set -euo pipefail
 APP_DIR="databricks-ttyd-app"
 APP_NAME="databricks-ttyd-app"
 
+usage() {
+    cat <<EOF
+Usage: $0 [-p PROFILE] [-u USERNAME] [-n APP_NAME] [-y]
+
+Options:
+  -p PROFILE    Databricks CLI profile name
+  -u USERNAME   Workspace username/email (e.g. user@company.com)
+  -n APP_NAME   App name (default: databricks-ttyd-app)
+  -y            Skip confirmation prompt
+  -h            Show this help message
+
+If options are omitted, the script will prompt interactively.
+EOF
+    exit 0
+}
+
+# ── Parse command-line arguments ───────────────────────────────────────────
+PROFILE=""
+USERNAME=""
+SKIP_CONFIRM=false
+
+while getopts ":p:u:n:yh" opt; do
+    case $opt in
+        p) PROFILE="$OPTARG" ;;
+        u) USERNAME="$OPTARG" ;;
+        n) APP_NAME="$OPTARG" ;;
+        y) SKIP_CONFIRM=true ;;
+        h) usage ;;
+        :) echo "Option -$OPTARG requires an argument." >&2; exit 1 ;;
+        \?) echo "Unknown option -$OPTARG" >&2; exit 1 ;;
+    esac
+done
+
 # ── Gather target environment info ──────────────────────────────────────────
 
 echo "=== Databricks ttyd App Deployer ==="
 echo ""
 
 # Profile
-read -rp "Databricks CLI profile name (or press Enter to list profiles): " PROFILE
 if [[ -z "$PROFILE" ]]; then
-    echo ""
-    databricks auth profiles
-    echo ""
-    read -rp "Enter profile name: " PROFILE
+    read -rp "Databricks CLI profile name (or press Enter to list profiles): " PROFILE
+    if [[ -z "$PROFILE" ]]; then
+        echo ""
+        databricks auth profiles
+        echo ""
+        read -rp "Enter profile name: " PROFILE
+    fi
 fi
 
 # Validate profile by attempting to fetch a token
@@ -29,11 +64,15 @@ fi
 echo "Using profile: $PROFILE"
 
 # Workspace username for upload path
-read -rp "Workspace username/email (e.g. user@company.com): " USERNAME
+if [[ -z "$USERNAME" ]]; then
+    read -rp "Workspace username/email (e.g. user@company.com): " USERNAME
+fi
 
-# App name
-read -rp "App name [$APP_NAME]: " CUSTOM_NAME
-APP_NAME="${CUSTOM_NAME:-$APP_NAME}"
+# App name (only prompt if not set via -n)
+if [[ "$APP_NAME" == "databricks-ttyd-app" ]] && [[ "$SKIP_CONFIRM" == false ]]; then
+    read -rp "App name [$APP_NAME]: " CUSTOM_NAME
+    APP_NAME="${CUSTOM_NAME:-$APP_NAME}"
+fi
 
 WORKSPACE_PATH="/Workspace/Users/${USERNAME}/${APP_NAME}"
 
@@ -43,10 +82,13 @@ echo "  Profile:        $PROFILE"
 echo "  App name:       $APP_NAME"
 echo "  Workspace path: $WORKSPACE_PATH"
 echo ""
-read -rp "Proceed? [Y/n] " CONFIRM
-if [[ "$CONFIRM" == "n" || "$CONFIRM" == "N" ]]; then
-    echo "Aborted."
-    exit 0
+
+if [[ "$SKIP_CONFIRM" == false ]]; then
+    read -rp "Proceed? [Y/n] " CONFIRM
+    if [[ "$CONFIRM" == "n" || "$CONFIRM" == "N" ]]; then
+        echo "Aborted."
+        exit 0
+    fi
 fi
 
 # ── Ensure ttyd binary exists ───────────────────────────────────────────────
